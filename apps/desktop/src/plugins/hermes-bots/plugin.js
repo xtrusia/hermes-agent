@@ -2865,6 +2865,11 @@ function showsHandle(name, meta, bot) {
 // mint two canonical chats.
 const canonicalCreations = new Map()
 
+/** Open a bot-owned session into the main composer, not as a sidebar tile. */
+function openOwnedSession(sid, name) {
+  return host.openSession(sid, { profile: name, keepAllProfilesScope: false })
+}
+
 /** Create the bot's ONE forever chat: a real session opened with a kickoff
  *  message (the gateway prunes zero-message sessions, so the chat is born
  *  with the bot introducing itself). Pins the stored id in bot meta and
@@ -2899,7 +2904,7 @@ function createCanonicalChat(name) {
 
     if (sid && typeof host.openSession === 'function') {
       try {
-        await host.openSession(sid, { profile: name })
+        await openOwnedSession(sid, name)
         opened = true
       } catch {
         // The stored row may not exist until the kickoff persists it. Retry
@@ -2914,7 +2919,7 @@ function createCanonicalChat(name) {
         await host.request('prompt.submit', { session_id: runtime, text: 'Hey, tell me about yourself!' })
 
         if (!opened && sid && typeof host.openSession === 'function') {
-          await host.openSession(sid, { profile: name })
+          await openOwnedSession(sid, name)
         }
       } catch {
         // The chat already exists. Keep the pin so the next click
@@ -2949,7 +2954,7 @@ async function openBotCanonicalChat(name, pinned, history) {
     const adoptId = history?.id
     if (adoptId && typeof host.openSession === 'function') {
       try {
-        await host.openSession(adoptId, { profile: name })
+        await openOwnedSession(adoptId, name)
         saveBotMeta(name, { chat: adoptId })
         return adoptId
       } catch {
@@ -2982,7 +2987,7 @@ async function openBotCanonicalChat(name, pinned, history) {
     // Transient gateway state (or an older backend): the pin is innocent
     // until proven guilty — try it as-is, and only a rejected open clears.
     try {
-      await host.openSession(pinned, { profile: name })
+      await openOwnedSession(pinned, name)
       return pinned
     } catch {
       saveBotMeta(name, { chat: null })
@@ -2992,7 +2997,7 @@ async function openBotCanonicalChat(name, pinned, history) {
 
   if (preferred) {
     try {
-      await host.openSession(preferred.resolved_id || preferred.id, { profile: name })
+      await openOwnedSession(preferred.resolved_id || preferred.id, name)
       return pinned
     } catch (error) {
       // The precise lookup JUST confirmed this session exists, so a failed
@@ -3009,7 +3014,7 @@ async function openBotCanonicalChat(name, pinned, history) {
   const recoveryId = history?.id
   if (recoveryId && typeof host.openSession === 'function') {
     try {
-      await host.openSession(recoveryId, { profile: name })
+      await openOwnedSession(recoveryId, name)
       saveBotMeta(name, { chat: recoveryId })
       return recoveryId
     } catch {
@@ -7042,7 +7047,7 @@ async function openProfileSession(botName, storedId, gatewayGeneration) {
   if (typeof host.openSession !== 'function') {
     throw new Error('This Hermes Desktop version cannot open stored sessions')
   }
-  await host.openSession(id, { profile })
+  await openOwnedSession(id, profile)
   if (gatewayGeneration !== $sessionsGatewayGeneration.get()) return
   $botSelectedSessions.set({ ...$botSelectedSessions.get(), [profile]: id })
 }

@@ -20,13 +20,20 @@ vi.mock('@/store/system-actions', () => ({ runGatewayRestart: vi.fn() }))
 vi.mock('@/store/session', async () => {
   const { atom } = await import('nanostores')
 
+  const $activeSessionId = atom<null | string>(null)
+  const $selectedStoredSessionId = atom<null | string>(null)
+
   return {
-    $activeSessionId: atom(null),
+    $activeSessionId,
     $connection: atom(null),
     $currentCwd: atom(''),
     $currentModel: atom(''),
     $gatewayState: atom('open'),
-    $selectedStoredSessionId: atom(null)
+    $selectedStoredSessionId,
+    setActiveSessionId: (next: null | string | ((value: null | string) => null | string)) =>
+      $activeSessionId.set(typeof next === 'function' ? next($activeSessionId.get()) : next),
+    setSelectedStoredSessionId: (next: null | string | ((value: null | string) => null | string)) =>
+      $selectedStoredSessionId.set(typeof next === 'function' ? next($selectedStoredSessionId.get()) : next)
   }
 })
 vi.mock('@/store/session-states', async () => {
@@ -56,6 +63,7 @@ vi.mock('@/store/profile', async () => {
 
   return {
     $activeGatewayProfile: atom('remote-worker'),
+    $newChatProfile: atom(null),
     $profiles: profiles,
     ensureGatewayAgent: vi.fn(),
     ensureGatewayProfile: vi.fn(),
@@ -93,9 +101,12 @@ vi.mock('@/store/gateway', async () => {
 })
 
 const { host } = await import('./index')
+const { openSession } = await import('@/app/open-session')
 const { deleteProfile } = await import('@/hermes')
 const { requestGatewayForAgent, requestGatewayForProfile, retireLocalProfileGateways } = await import('@/store/gateway')
-const { $profiles, refreshProfiles } = await import('@/store/profile')
+const { $activeGatewayProfile, $newChatProfile, $profiles, ensureGatewayProfile, refreshProfiles, setShowAllProfiles } =
+  await import('@/store/profile')
+const { $activeSessionId, $selectedStoredSessionId } = await import('@/store/session')
 
 const profile = (name: string): ProfileInfo => ({
   has_env: false,
@@ -110,6 +121,11 @@ const profile = (name: string): ProfileInfo => ({
 afterEach(() => {
   vi.clearAllMocks()
   $profiles.set([profile('cached-only')])
+  $activeGatewayProfile.set('remote-worker')
+  $newChatProfile.set(null)
+  $activeSessionId.set(null)
+  $selectedStoredSessionId.set(null)
+  window.location.hash = ''
   delete (window as unknown as { hermesDesktop?: unknown }).hermesDesktop
 })
 
@@ -260,5 +276,39 @@ describe('connection-aware plugin host APIs', () => {
 
     await expect(host.requestProfile('research', 'profiles.list')).rejects.toThrow(/route descriptor/i)
     expect(requestGatewayForProfile).not.toHaveBeenCalled()
+  })
+})
+
+describe('host.openSession composer binding', () => {
+  it('binds main to the opened bot even if the previous chat was selected', async () => {
+    window.location.hash = '#/old-session'
+    $activeGatewayProfile.set('default')
+    $activeSessionId.set('runtime-old')
+    $selectedStoredSessionId.set('old-session')
+
+    await host.openSession('bot-b-chat', { keepAllProfilesScope: false, profile: 'chief' })
+
+    expect($newChatProfile.get()).toBe('chief')
+    expect($selectedStoredSessionId.get()).toBe('bot-b-chat')
+    expect($activeSessionId.get()).toBeNull()
+    expect(window.location.hash).toBe('#/bot-b-chat')
+    expect(ensureGatewayProfile).toHaveBeenCalledWith('chief')
+    expect(setShowAllProfiles).toHaveBeenCalledWith(false)
+    expect(openSession).toHaveBeenCalledWith('bot-b-chat', expect.any(Function), 'in-place', { forceMain: true })
+  })
+
+  it('re-binds after the gateway swap so a later send cannot keep the previous bot', async () => {
+    $activeGatewayProfile.set('default')
+    vi.mocked(ensureGatewayProfile).mockImplementationOnce(async () => {
+      window.location.hash = '#/old-session'
+      $selectedStoredSessionId.set('old-session')
+      $activeSessionId.set('runtime-old')
+    })
+
+    await host.openSession('bot-b-chat', { profile: 'chief' })
+
+    expect($selectedStoredSessionId.get()).toBe('bot-b-chat')
+    expect($activeSessionId.get()).toBeNull()
+    expect(window.location.hash).toBe('#/bot-b-chat')
   })
 })

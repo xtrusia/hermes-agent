@@ -23,6 +23,7 @@ import type { ReactNode } from 'react'
 
 import { PRIMARY_SESSION_VIEW } from '@/app/chat/session-view'
 import { openSession, type OpenSessionIntent } from '@/app/open-session'
+import { sessionRoute } from '@/app/routes'
 import type { ClientSessionState } from '@/app/types'
 import {
   $narrowViewport,
@@ -64,6 +65,7 @@ import {
   $currentModel,
   $gatewayState,
   $selectedStoredSessionId,
+  setActiveSessionId,
   setSelectedStoredSessionId
 } from '@/store/session'
 import {
@@ -380,18 +382,38 @@ export const host = {
     options: { intent?: OpenSessionIntent; keepAllProfilesScope?: boolean; profile?: null | string } = {}
   ): Promise<void> => {
     const profile = (options.profile ?? '').trim()
+    const switching = Boolean(profile && profile !== $activeGatewayProfile.get())
 
-    if (profile) {
-      $newChatProfile.set(normalizeProfileKey(profile))
-    }
-
-    if (profile && profile !== $activeGatewayProfile.get()) {
-      await ensureGatewayProfile(profile)
-
-      if (options.keepAllProfilesScope !== false) {
-        setShowAllProfiles(true)
+    const bindComposer = (): void => {
+      if (profile) {
+        $newChatProfile.set(normalizeProfileKey(profile))
       }
+
+      if ($selectedStoredSessionId.get() !== storedSessionId) {
+        setActiveSessionId(null)
+      }
+
+      setSelectedStoredSessionId(storedSessionId)
+      window.location.hash = `#${sessionRoute(storedSessionId)}`
     }
+
+    // Bind before the gateway swap. Submit prefers the routed session; if the
+    // hash still names the previous bot, waiting cannot help.
+    bindComposer()
+
+    if (switching) {
+      await ensureGatewayProfile(profile)
+    }
+
+    if (profile && options.keepAllProfilesScope === false) {
+      setShowAllProfiles(false)
+    } else if (switching && options.keepAllProfilesScope !== false) {
+      setShowAllProfiles(true)
+    }
+
+    // A mid-swap 404 can yank the route back to the previous chat. Re-bind
+    // after the gateway is live so a later send still targets this session.
+    bindComposer()
 
     openSession(
       storedSessionId,
@@ -404,12 +426,9 @@ export const host = {
           window.location.hash = target
         }
       },
-      options.intent ?? 'in-place'
+      options.intent ?? 'in-place',
+      { forceMain: (options.intent ?? 'in-place') === 'in-place' }
     )
-    // Hash write is visible immediately; React Router's pathname is not.
-    // Bind the composer selection now so a send in this turn cannot keep
-    // the previous bot's stored session.
-    setSelectedStoredSessionId(storedSessionId)
   },
 
   /** Open (or re-front) a plugin-rendered MAIN-AREA workspace tile — the same

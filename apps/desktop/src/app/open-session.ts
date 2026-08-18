@@ -29,6 +29,14 @@ export type OpenSessionIntent = 'in-place' | 'stack' | 'tab' | 'window'
 
 export type OpenSessionNavigate = (to: string, options?: { replace?: boolean }) => void
 
+export type OpenSessionOptions = {
+  /**
+   * Put the session in the main composer even if it is already a tile.
+   * Bot Mode types into main; fronting a tile leaves the previous chat bound.
+   */
+  forceMain?: boolean
+}
+
 /**
  * Is the main tab holding a conversation worth preserving?
  *
@@ -72,7 +80,8 @@ export function openSessionIntentFromModifiers(
 export function openSession(
   storedSessionId: string,
   navigate: OpenSessionNavigate,
-  intent: OpenSessionIntent = 'in-place'
+  intent: OpenSessionIntent = 'in-place',
+  options: OpenSessionOptions = {}
 ): void {
   if (!storedSessionId) {
     return
@@ -132,6 +141,14 @@ export function openSession(
   // otherwise load it into main. From a full page (artifacts, skills, …) a
   // `'main'` hit still has to route back: fronting the workspace tab alone
   // leaves the page showing.
+  //
+  // `forceMain` must not call focusOpenSession: that fronts a tile and leaves
+  // the primary composer on the previous bot, even after a long wait.
+  if (options.forceMain) {
+    navigate(sessionRoute(storedSessionId))
+    return
+  }
+
   if (focusedSessionNeedsRoute(focusOpenSession(storedSessionId), $workspaceIsPage.get())) {
     navigate(sessionRoute(storedSessionId))
   }

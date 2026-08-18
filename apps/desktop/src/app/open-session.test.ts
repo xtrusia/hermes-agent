@@ -203,4 +203,12 @@ describe('openSession', () => {
     expect(navigate).not.toHaveBeenCalled()
     expect(focusOpenSession).not.toHaveBeenCalled()
   })
+
+  it('forceMain routes into main without fronting an existing tile', () => {
+    focusOpenSession.mockReturnValue('tile')
+    openSession('s1', navigate, 'in-place', { forceMain: true })
+    expect(focusOpenSession).not.toHaveBeenCalled()
+    expect(navigate).toHaveBeenCalledWith('/c/s1')
+    expect(openSessionTile).not.toHaveBeenCalled()
+  })
 })
