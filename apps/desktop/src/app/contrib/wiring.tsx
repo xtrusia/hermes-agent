@@ -93,6 +93,7 @@ import {
   CRON_ROUTE,
   navigateToWorkspacePage,
   routeSessionId,
+  routedSessionIdFromLiveHash,
   sessionRoute,
   SETTINGS_ROUTE,
   syncWorkspaceRoute
@@ -222,7 +223,11 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   routeTokenRef.current = routeToken
   const getRouteToken = useCallback(() => routeTokenRef.current, [])
 
-  const getRoutedStoredSessionId = useCallback(() => routedSessionIdRef.current, [])
+  const getRoutedStoredSessionId = useCallback(() => {
+    const live = routedSessionIdFromLiveHash()
+
+    return live === undefined ? routedSessionIdRef.current : live
+  }, [])
 
   const clearRoutedSessionIntent = useCallback(() => {
     routedSessionIdRef.current = null

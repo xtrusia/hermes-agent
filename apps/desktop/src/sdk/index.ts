@@ -46,6 +46,7 @@ import {
 import { notify, notifyError } from '@/store/notifications'
 import {
   $activeGatewayProfile,
+  $newChatProfile,
   $profiles,
   ensureGatewayAgent,
   ensureGatewayProfile,
@@ -62,7 +63,8 @@ import {
   $currentCwd,
   $currentModel,
   $gatewayState,
-  $selectedStoredSessionId
+  $selectedStoredSessionId,
+  setSelectedStoredSessionId
 } from '@/store/session'
 import {
   $focusedRuntimeId,
@@ -379,6 +381,10 @@ export const host = {
   ): Promise<void> => {
     const profile = (options.profile ?? '').trim()
 
+    if (profile) {
+      $newChatProfile.set(normalizeProfileKey(profile))
+    }
+
     if (profile && profile !== $activeGatewayProfile.get()) {
       await ensureGatewayProfile(profile)
 
@@ -400,6 +406,10 @@ export const host = {
       },
       options.intent ?? 'in-place'
     )
+    // Hash write is visible immediately; React Router's pathname is not.
+    // Bind the composer selection now so a send in this turn cannot keep
+    // the previous bot's stored session.
+    setSelectedStoredSessionId(storedSessionId)
   },
 
   /** Open (or re-front) a plugin-rendered MAIN-AREA workspace tile — the same

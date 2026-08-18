@@ -165,6 +165,45 @@ export function routeSessionId(pathname: string): string | null {
 }
 
 /**
+ * HashRouter path already written to the window, even before React Router
+ * re-renders. `host.openSession` assigns `location.hash` and returns; a send
+ * in that same turn must not still see the previous session.
+ *
+ * `null` means there is no hash yet (use the router pathname). A written
+ * hash always yields a path: `#/` is the new-chat route.
+ */
+export function liveHashPathname(): string | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const raw = window.location.hash
+
+  if (!raw) {
+    return null
+  }
+
+  const hash = raw.replace(/^#/, '')
+
+  if (!hash) {
+    return null
+  }
+
+  return routePathname(hash.startsWith('/') ? hash : `/${hash}`)
+}
+
+/**
+ * Session id from the live hash. `undefined` = no hash written (caller should
+ * keep the React Router value). `null` = hash is new-chat or a non-session
+ * page, so a leftover router id must not win.
+ */
+export function routedSessionIdFromLiveHash(): string | null | undefined {
+  const path = liveHashPathname()
+
+  return path === null ? undefined : routeSessionId(path)
+}
+
+/**
  * The primary composer's durable scope key candidate: the route is the source
  * of truth for which chat is on screen, so prefer its (stable) stored session
  * id over a store selection that can be momentarily null/stale mid-switch

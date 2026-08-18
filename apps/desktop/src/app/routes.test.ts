@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
-import { NEW_CHAT_ROUTE, primaryRouteSelectedSessionId, sessionRoute, SETTINGS_ROUTE } from './routes'
+import { NEW_CHAT_ROUTE, primaryRouteSelectedSessionId, routedSessionIdFromLiveHash, sessionRoute, SETTINGS_ROUTE } from './routes'
 
 const SESS_A = 'sess-a'
 const SESS_B = 'sess-b'
@@ -26,5 +26,31 @@ describe('primaryRouteSelectedSessionId', () => {
 
   it('returns null on a non-chat route with no store selection', () => {
     expect(primaryRouteSelectedSessionId(SETTINGS_ROUTE, null)).toBeNull()
+  })
+})
+
+describe('routedSessionIdFromLiveHash', () => {
+  const originalHash = window.location.hash
+
+  afterEach(() => {
+    window.location.hash = originalHash
+  })
+
+  it('returns undefined when no hash has been written yet', () => {
+    window.location.hash = ''
+
+    expect(routedSessionIdFromLiveHash()).toBeUndefined()
+  })
+
+  it('reads the session id from a hash write before React Router catches up', () => {
+    window.location.hash = sessionRoute(SESS_B)
+
+    expect(routedSessionIdFromLiveHash()).toBe(SESS_B)
+  })
+
+  it('returns null for a new-chat hash so a leftover router id cannot win', () => {
+    window.location.hash = '#/'
+
+    expect(routedSessionIdFromLiveHash()).toBeNull()
   })
 })
